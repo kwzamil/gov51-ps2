@@ -320,3 +320,193 @@ fabricator produce data with these properties?
 Your interpretation:
 
 The baseline distribution of feeling thermometer scores in the LaCour data closely matches the CCAP survery with nearly identical means (58.38 in the experiment vs. 58.71 in CCAP) and very similar standard deviations (28.50 vs. 29.37). However, the retest correlation in Study 1 is very high (0.998), far above the typical range of 0.95–0.97 for real feeling thermometer data and the standard deviation of the within-person change in Study 1 is only about 1.99, compared to 6.61 in Study 2, indicating that responses in Study 1 barely changed between waves. Taken together, these patterns suggest the data were likely fabricated rather than collected from real respondents. A fabricator might copy the distribution of a real survey like CCAP to make the data look realistic but unintentionally generate responses that are too consistent across waves which produces impossibly high correlations and minimal individual change.
+
+### 3 Part 3: What Real Data Looks Like (25 points)
+
+**3.1 Comparing Baselines**
+Q3.1 (3 points): Filter gayreshaped.csv to Study 2. How many observations? Calculate the
+mean and SD of therm1 (baseline) for the treatment group and the control group separately.
+
+```{r}
+gay2 <- read_csv("data/raw/gayreshaped.csv")
+
+study2 <- gay2 %>%
+  filter(study == 2)
+
+nrow(study2)
+
+# mean and SD of baseline thermometer by treatment group
+study2 %>%
+  group_by(treatment) %>%
+  summarize(
+    mean_therm1 = mean(therm1, na.rm = TRUE),
+    sd_therm1 = sd(therm1, na.rm = TRUE)
+  )
+```
+
+Q3.2 (3 points): Create side-by-side histograms of Study 1 baseline (therm1) and Study 2 baseline
+(therm1), using the same bins as before. How do they compare visually? (2–3 sentences)
+
+```{r}
+gay2 <- read_csv("data/raw/gayreshaped.csv")
+
+gay2 %>%
+  filter(study == 1) %>%
+  ggplot(aes(x = therm1)) +
+  geom_histogram(binwidth = 10, fill = "steelblue", color = "white") +
+  labs(
+    title = "Study 1 Baseline Thermometer (therm1)",
+    x = "Thermometer Score",
+    y = "Count"
+  )
+
+gay2 %>%
+  filter(study == 2) %>%
+  ggplot(aes(x = therm1)) +
+  geom_histogram(binwidth = 10, fill = "darkorange", color = "white") +
+  labs(
+    title = "Study 2 Baseline Thermometer (therm1)",
+    x = "Thermometer Score",
+    y = "Count"
+  )
+```
+
+Your interpretation: *The baseline thermometer score distributions for Study 1 and Study 2 look broadly similar. In both studies, responses are spread across the full range with a noticeable concentration around the middle values (around 50) and some clustering at higher scores. Study 1 appears to have more observations but the shape is similar between the two studies.*
+
+**3.2 Checking Balance and Comparing Outcomes in Study 2**
+Q3.3 (3 points): Filter gayreshaped.csv to Study 2, keeping only the “Same-Sex Marriage Script
+by Gay Canvasser” and “No Contact” groups. Check balance at baseline: calculate the mean and
+SD of therm1 for each group and the standardized difference in means (same formula as Q1.5). Do
+the groups look balanced? (1–2 sentences)
+
+```{r}
+study2_groups <- gay2 %>%
+  filter(
+    study == 2,
+    treatment %in% c("Same-Sex Marriage Script by Gay Canvasser", "No Contact")
+  )
+
+balance <- study2_groups %>%
+  group_by(treatment) %>%
+  summarize(
+    mean_therm1 = mean(therm1, na.rm = TRUE),
+    sd_therm1 = sd(therm1, na.rm = TRUE)
+  )
+
+balance
+
+std_diff <- (balance$mean_therm1[balance$treatment == "Same-Sex Marriage Script by Gay Canvasser"] -
+             balance$mean_therm1[balance$treatment == "No Contact"]) /
+            sqrt(mean(balance$sd_therm1^2))
+
+std_diff
+
+```
+
+Your interpretation: *The baseline thermometer scores are very similar between the treatment and control groups, with means of about 59.35 and 57.89 and almost identical standard deviations. The standardized difference is approximately 0.051, below the 0.25 threshold. This suggests the groups are well balanced at baseline.*
+
+Q3.4 (3 points): Now compare outcomes. Calculate the mean therm2 (post-conversation) for
+each group. What is the difference in post-period means (gay canvasser minus no contact)?
+
+```{r}
+study2_outcomes <- gay2 %>%
+  filter(
+    study == 2,
+    treatment %in% c("Same-Sex Marriage Script by Gay Canvasser", "No Contact")
+  )
+
+post_means <- study2_outcomes %>%
+  group_by(treatment) %>%
+  summarize(mean_therm2 = mean(therm2, na.rm = TRUE))
+
+post_means
+
+diff_post <- post_means$mean_therm2[
+  post_means$treatment == "Same-Sex Marriage Script by Gay Canvasser"
+] -
+post_means$mean_therm2[
+  post_means$treatment == "No Contact"
+]
+
+diff_post
+```
+
+The score is about 61.20 for the gay canvasser group and 57.64 for the no contact group. The difference in means (gay canvasser minus no contact) is approximately 3.57 points indicating a higher post period attitude toward same sex marriage in the treatment
+
+**3.3 Uncertainty Around the Difference**
+Q3.5 (4 points): Calculate the standard error of the difference in post-period means from Q3.4.
+Use the formula:
+is the variance of therm2 and 𝑛 is the sample size for each group. Then construct a 95%
+confidence interval: ( ̄𝑥1 − ̄𝑥2
+) ± 1.96 × 𝑆𝐸. Does the CI include zero? What does this tell you about whether the groups differ after the conversations?
+
+```{r}
+study2_post <- gay2 %>%
+  filter(
+    study == 2,
+    treatment %in% c("Same-Sex Marriage Script by Gay Canvasser", "No Contact")
+  )
+
+# get n and sd for therm2 in each group 
+post_stats <- study2_post %>%
+  group_by(treatment) %>%
+  summarize(
+    n = sum(!is.na(therm2)),
+    mean_therm2 = mean(therm2, na.rm = TRUE),
+    sd_therm2 = sd(therm2, na.rm = TRUE)
+  )
+
+post_stats
+
+# pull out group-specific values
+n_treat <- post_stats$n[post_stats$treatment == "Same-Sex Marriage Script by Gay Canvasser"]
+n_ctrl  <- post_stats$n[post_stats$treatment == "No Contact"]
+
+sd_treat <- post_stats$sd_therm2[post_stats$treatment == "Same-Sex Marriage Script by Gay Canvasser"]
+sd_ctrl  <- post_stats$sd_therm2[post_stats$treatment == "No Contact"]
+
+# difference in means 
+diff_post <- post_stats$mean_therm2[post_stats$treatment == "Same-Sex Marriage Script by Gay Canvasser"] -
+  post_stats$mean_therm2[post_stats$treatment == "No Contact"]
+
+# se using the formula
+SE <- sqrt((sd_treat^2 / n_treat) + (sd_ctrl^2 / n_ctrl))
+SE
+
+# 95% confidence interval
+CI_low  <- diff_post - 1.96 * SE
+CI_high <- diff_post + 1.96 * SE
+c(CI_low = CI_low, CI_high = CI_high)
+
+# Does CI include 0?
+CI_low <= 0 & CI_high >= 0
+```
+
+Your interpretation: The 95% ci for the difference in postperiod means ranges from about 1.13 to 6.00. Because the interval does not include zero, this suggests that the groups differ after the conversations. This provides evidence that the gay canvasser treatment increased thermometer ratings relative to the no-contact group.
+
+**3.4 Tracking Attitudes Over Time**
+Q3.6 (4 points): For the Study 2 control group, calculate the correlation between therm1 and
+each subsequent wave: therm2, therm3, and therm4. Use cor() with use = "complete.obs".
+Do the correlations decay over time (i.e., do more distant waves correlate less with baseline)? What
+does this pattern tell you about the stability of real survey measurements? (2–3 sentences)
+
+```{r}
+study2_control <- gay2 %>%
+  filter(study == 2, treatment == "No Contact")
+
+cor(study2_control$therm1, study2_control$therm2, use = "complete.obs")
+cor(study2_control$therm1, study2_control$therm3, use = "complete.obs")
+cor(study2_control$therm1, study2_control$therm4, use = "complete.obs")
+```
+
+Your interpretation: *The correlations between baseline attitudes (therm1) and later waves are very high, all around 0.96–0.97. The correlation with therm3 is slightly lower than with therm2, suggesting a small amount of decay over time, though the values remain very strong overall. This indicates that respondents’ attitudes are quite stable across survey waves, but real measurements still include some noise and variation over time.*
+
+Q3.7 (5 points): You’ve now analyzed fabricated data (Study 1), caught the fraud, and examined
+more realistic data (Study 2). In 5–6 sentences, discuss:
+• What makes Study 2’s data different from Study 1’s data? Be specific about which statistics
+differ and by how much.
+• Why is it important that real treatment effects are smaller and messier than fabricated ones?
+• What role did simple measurement tools (mean, SD, histograms, correlations) play in detecting the fraud?
+Your reflection:
+
+*Study 2’s data look much more realistic than the fabricated data from Study 1. In Study 1, the patterns were very clean and the treatment effects looked unusually strong, while in Study 2 the differences between groups are smaller and there is much more variation in responses. For example, the post-period difference between the treatment and control groups in Study 2 is only about 3.6 points, and the standard deviations are large (around 28 points), showing that people’s responses vary a lot. Real treatment effects are usually smaller and messier because people’s attitudes change slowly and survey data always include noise. If results look too perfect or too consistent, it can be a sign that the data might not be real. Simple tools like means, standard deviations, histograms, and correlations helped reveal these differences and made it easier to spot the unrealistic patterns in Study 1.*
