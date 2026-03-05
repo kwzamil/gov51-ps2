@@ -1,0 +1,171 @@
+---
+title: "gov51 pset2"
+author: "Khalid Alzamil"
+format: pdf
+editor: visual
+---
+
+## 
+
+**1 Part 1: The Original Study (20 points)**
+In this section, you’ll analyze LaCour’s data as if the study were real. This is what researchers did
+when the paper first came out.
+
+**1.1 Exploring the Experiment**
+1.1.1 Load packages and data
+
+```{r}
+library(tidyverse)
+gay <- read_csv("data/raw/gay.csv")
+```
+
+Q1.1 (3 points): How many total observations are in gay.csv? How many unique values does
+study take? List all the treatment conditions in the treatment variable.
+
+```{r}
+gay <- read_csv("data/raw/gay.csv")
+
+# number of observations
+nrow(gay)
+
+# number of unique studies
+n_distinct(gay$study)
+
+# list treatment conditions
+unique(gay$treatment)
+```
+
+*The dataset contains 69,592 observations.*
+
+*The variable study takes 2 unique values.*
+
+*The treatment conditions are: No Contact, Recycling Script by Gay Canvasser, Same sex Marriage Script by Gay Canvasser, Recycling Script by Straight Canvasser, and Same sex Marriage Script by Straight Canvasser.*
+
+Q1.2 (3 points): Filter to Study 1, Wave 1 only. Calculate the mean of ssm (same-sex marriage attitude, scored 1–5) for each treatment group using group_by() and summarize(). Which
+treatment group shows the highest average support?
+
+```{r}
+gay %>%
+  filter(study == 1, wave == 1) %>%
+  group_by(treatment) %>%
+  summarize(mean_ssm = mean(ssm, na.rm = TRUE)) %>%
+  arrange(desc(mean_ssm))
+```
+
+*The Recycling Script by Gay Canvasser treatment shows the highest average support for same-sex marriage*
+
+Q1.3 (3 points): Still using Study 1, Wave 1, calculate the standard deviation of ssm within
+each treatment group. Are the standard deviations roughly similar across groups? Why is this
+important in a randomized experiment? (2–3 sentences)
+
+```{r}
+gay %>%
+  filter(study == 1, wave == 1) %>%
+  group_by(treatment) %>%
+  summarize(sd_ssm = sd(ssm, na.rm = TRUE))
+```
+
+Your interpretation:
+The standard deviations are very similar across the treatment groups, all around 1.67–1.70. This suggests that the variability in same sex marriage attitudes is roughly the same across groups. In a randomized experiment similar variability across treatment groups is important because it indicates that the groups are comparable + that differences in outcomes are more likely due to the treatment rather than underlying differences between groups.
+
+Q1.4 (3 points): Create a bar plot of the mean ssm by treatment group (Study 1, Wave 1) using
+ggplot() with geom_col(). Hint: First create a summary data frame with the means, then plot
+it.
+
+```{r}
+mean_ssm <- gay %>%
+  filter(study == 1, wave == 1) %>%
+  group_by(treatment) %>%
+  summarize(mean_ssm = mean(ssm, na.rm = TRUE))
+
+ggplot(mean_ssm, aes(x = treatment, y = mean_ssm)) +
+  geom_col() +
+  labs(
+    title = "Average Same-Sex Marriage Support by Treatment",
+    x = "Treatment Group",
+    y = "Mean SSM"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) #names were too long
+```
+
+**1.2 Checking Balance and Comparing Outcomes**
+Q1.5 (4 points): A well-run randomized experiment should produce groups that look similar at
+baseline. Filter gay.csv to Study 1, Wave 1. Compare the “Same-Sex Marriage Script by Gay
+Canvasser” group and the “No Contact” group:
+• Calculate the mean and SD of ssm for each group
+• Compute the standardized difference in means:
+A standardized difference below 0.25 in absolute value suggests good balance. Do these groups look
+similar at baseline? (2–3 sentences)
+
+```{r}
+baseline <- gay %>%
+  filter(
+    study == 1,
+    wave == 1,
+    treatment %in% c(
+      "Same-Sex Marriage Script by Gay Canvasser",
+      "No Contact"
+    )
+  )
+
+baseline %>%
+  group_by(treatment) %>%
+  summarize(
+    mean_ssm = mean(ssm, na.rm = TRUE),
+    sd_ssm = sd(ssm, na.rm = TRUE)
+  )
+```
+
+```{r}
+means <- baseline %>%
+  group_by(treatment) %>%
+  summarize(
+    mean_ssm = mean(ssm, na.rm = TRUE),
+    sd_ssm = sd(ssm, na.rm = TRUE)
+  )
+
+m1 <- means$mean_ssm[means$treatment == "Same-Sex Marriage Script by Gay Canvasser"]
+m2 <- means$mean_ssm[means$treatment == "No Contact"]
+
+s1 <- means$sd_ssm[means$treatment == "Same-Sex Marriage Script by Gay Canvasser"]
+s2 <- means$sd_ssm[means$treatment == "No Contact"]
+
+std_diff <- (m1 - m2) / sqrt((s1^2 + s2^2)/2)
+
+std_diff
+```
+
+Your interpretation: The mean and standard deviation are very similar between the Same sex Marriage Script by Gay Canvasser group and the No Contact group. The standardized difference in means is approx -0.01, aka below the 0.25 threshold. This suggests that the groups are well balanced at baseline which is what we would expect from a properly randomized experiment.
+
+Q1.6 (4 points): Now look at the outcomes. Filter to Study 1, Wave 2 only. Calculate the mean
+ssm for the gay canvasser group and the No Contact group. What is the difference in means (gay
+canvasser minus no contact)?
+Interpret: since the groups were balanced at baseline, what does a difference at Wave 2 suggest?
+(2–3 sentences)
+
+```{r}
+wave2 <- gay %>%
+  filter(
+    study == 1,
+    wave == 2,
+    treatment %in% c(
+      "Same-Sex Marriage Script by Gay Canvasser",
+      "No Contact"
+    )
+  )
+
+wave2_means <- wave2 %>%
+  group_by(treatment) %>%
+  summarize(mean_ssm = mean(ssm, na.rm = TRUE))
+
+wave2_means
+
+#diff in means
+diff <- wave2_means$mean_ssm[wave2_means$treatment == "Same-Sex Marriage Script by Gay Canvasser"] -
+        wave2_means$mean_ssm[wave2_means$treatment == "No Contact"]
+
+diff
+```
+
+Your interpretation: *At Wave 2, the mean support for same sex marriage in the “Same sex Marriage Script by Gay Canvasser” group is about 0.10 points higher than in the “No Contact” group. Because the groups were balanced at baseline this difference suggests that the canvassing treatment may have caused an increase in support for same sex marriage which indicates a possible causal effect of the treatment on attitudes toward same sex marriage.*
