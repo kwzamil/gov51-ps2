@@ -7,9 +7,7 @@ editor: visual
 
 ## 
 
-**1 Part 1: The Original Study (20 points)**
-In this section, you’ll analyze LaCour’s data as if the study were real. This is what researchers did
-when the paper first came out.
+#### **1 Part 1: The Original Study (20 points)**
 
 **1.1 Exploring the Experiment**
 1.1.1 Load packages and data
@@ -169,3 +167,156 @@ diff
 ```
 
 Your interpretation: *At Wave 2, the mean support for same sex marriage in the “Same sex Marriage Script by Gay Canvasser” group is about 0.10 points higher than in the “No Contact” group. Because the groups were balanced at baseline this difference suggests that the canvassing treatment may have caused an increase in support for same sex marriage which indicates a possible causal effect of the treatment on attitudes toward same sex marriage.*
+
+#### 2 Part 2: The Forensic Discovery (30 points)
+
+**2.1 The Baseline Distribution**
+
+Q2.1 (3 points): Load gayreshaped.csv and ccap2012.csv. Report the number of observations
+and column names for each dataset. In gayreshaped.csv, the variables therm1 through therm4
+represent feeling thermometer scores (0–100) toward gay men and lesbians, measured at each survey
+wave.
+
+```{r}
+gay_r <- read_csv("data/raw/gayreshaped.csv")
+ccap <- read_csv("data/raw/ccap2012.csv")
+
+#observations
+nrow(gay_r)
+nrow(ccap)
+
+#names
+colnames(gay_r)
+colnames(ccap)
+```
+
+The dataset gay_r contains 11948 observations with the variables: study, treatment, therm1, therm2, therm3, and therm4. The dataset ccap contains 43998 observations with variables: caseid and gaytherm.
+
+Q2.2 (5 points): Extract the baseline feeling thermometer (therm1) for Study 1 from
+gayreshaped.csv. Calculate its mean, median, and standard deviation. Then do the same for
+gaytherm from ccap2012.csv (remove NAs). Report both sets of statistics side by side. What do
+you notice? (1–2 sentences)
+
+```{r}
+# baseline thermometer
+gay_base <- gay_r %>%
+  filter(study == 1) %>%
+  summarize(
+    mean = mean(therm1, na.rm = TRUE),
+    median = median(therm1, na.rm = TRUE),
+    sd = sd(therm1, na.rm = TRUE)
+  )
+
+# ccap thermometer
+ccap_base <- ccap %>%
+  summarize(
+    mean = mean(gaytherm, na.rm = TRUE),
+    median = median(gaytherm, na.rm = TRUE),
+    sd = sd(gaytherm, na.rm = TRUE)
+  )
+
+# report
+baseline_stats <- bind_rows(
+  gayreshaped = gay_base,
+  ccap2012 = ccap_base,
+  .id = "dataset"
+)
+
+baseline_stats
+```
+
+What do you notice?
+
+The two datasets have a very similar average thermometer scores toward gay men and lesbians. The means are almost identical (about 58), and the standard deviations are also close, suggesting that the overall level and variation of attitudes toward gay men and lesbians are quite similar in the experimental sample and the CCAP survey.
+
+Q2.3 (5 points): Create side-by-side histograms comparing the LaCour Study 1 baseline (therm1)
+and the CCAP data (gaytherm). Use the same bin breaks for both: breaks = seq(0, 100, by
+= 5). Hint: Combine the two datasets into one data frame with a column indicating the source, then use
+ggplot() with facet_wrap(). Do these look like they came from different populations? (2–3 sentences)
+
+```{r}
+# extract thermometers
+gay_base <- gay_r %>%
+  filter(study == 1) %>%
+  select(therm = therm1) %>%
+  mutate(source = "LaCour Study 1")
+
+ccap_base <- ccap %>%
+  select(therm = gaytherm) %>%
+  mutate(source = "CCAP")
+
+combined <- bind_rows(gay_base, ccap_base) %>%
+  filter(!is.na(therm))
+
+# histogram 
+ggplot(combined, aes(x = therm)) +
+  geom_histogram(breaks = seq(0, 100, by = 5), color = "black", fill = "steelblue") +
+  facet_wrap(~source) +
+  labs(
+    title = "Distribution of Feeling Thermometer Toward Gay Men and Lesbians",
+    x = "Feeling Thermometer (0–100)",
+    y = "Count"
+  )
+```
+
+Your interpretation: *Although they have very different numbers of observation, the two histograms have very similar shapes and cover the same range of thermometer scores. Both distributions show clustering around the middle and higher values, suggesting similar attitudes toward gay men and lesbians, which suggests the LaCour Study 1 baseline sample doesn't look dramatically different from the CCAP population.*
+
+**2.2 Re-test Reliability**
+When real people take the same survey twice, their answers correlate — but not perfectly. People’s
+moods change, they round differently, they misread questions. A re-test correlation of 0.95–0.97 is
+normal for feeling thermometers. A correlation near 1.0 is suspicious.
+
+Q2.4 (6 points): For both the Study 1 and Study 2 control groups (“No Contact”), calculate:
+(a) The correlation between therm1 and therm2 (use cor() with use = "complete.obs")
+(b) The standard deviation of the within-person change (therm2 - therm1)
+Present your results side by side. A re-test correlation of 0.95–0.97 is typical for real feeling
+thermometer data. Which study shows a more plausible pattern, and why? (3–4 sentences)
+
+```{r}
+control_stats <- gay_r %>%
+  filter(treatment == "No Contact") %>%
+  mutate(change = therm2 - therm1) %>%
+  group_by(study) %>%
+  summarize(
+    correlation = cor(therm1, therm2, use = "complete.obs"),
+    sd_change = sd(change, na.rm = TRUE)
+  )
+
+control_stats
+```
+
+Your interpretation: *Study 2 shows a more plausible pattern of responses. Its correlation between therm1 and therm2 (0.973) falls within the typical range for retest reliability of feeling thermometers (0.95–0.97), and the standard deviation of the change is relatively larger, indicating meaningful variation in responses over time. Study 1 shows a very high correlation (0.998) and a very small standard deviation of change, suggesting that respondents’ answers barely changed between waves and this level of consistency is unusually high for actual survey data.*
+
+Q2.5 (5 points): Create two scatter plots side by side:
+(a) Study 1 control group: therm1 (x-axis) vs therm2 (y-axis), with a 45-degree line
+(b) Study 2 control group: therm1 (x-axis) vs therm2 (y-axis), with a 45-degree line
+Describe the differences. Which looks more like real longitudinal data, and why? (3–4 sentences)
+
+```{r}
+control_data <- gay_r %>%
+  filter(treatment == "No Contact")
+
+ggplot(control_data, aes(x = therm1, y = therm2)) +
+  geom_point(alpha = 0.4) +
+  geom_abline(slope = 1, intercept = 0, color = "red") +
+  facet_wrap(~study) +
+  labs(
+    title = "Re-test Reliability of Feeling Thermometer",
+    x = "Thermometer Wave 1 (therm1)",
+    y = "Thermometer Wave 2 (therm2)"
+  )
+```
+
+Your interpretation: *Study 1shows points almost perfectly aligned along the line showing that respondents answers changed very little between waves. In contrast, the Study 2 plot shows much more dispersion around the diagonal, with respondents’ answers increasing or decreasing between waves. This level of variation is typical for real survey data because responses fluctuate due to measurement error or changing attitudes. As such, Study 2 appears more consistent with realistic longitudinal survey data.*
+
+**2.3 Putting It All Together**
+Q2.6 (6 points): You’ve now found three irregularities:
+1. The baseline distributions match an existing national survey
+2. The re-test correlations are implausibly high (Study 1)
+3. The within-person changes are implausibly small (Study 1)
+In 4–5 sentences, explain why these three findings together suggest the data were fabricated rather
+than collected in a real experiment. Use specific numbers from your analysis. Why would a
+fabricator produce data with these properties?
+Your interpretation:
+
+The baseline distribution of feeling thermometer scores in the LaCour data closely matches the CCAP survery with nearly identical means (58.38 in the experiment vs. 58.71 in CCAP) and very similar standard deviations (28.50 vs. 29.37). However, the retest correlation in Study 1 is very high (0.998), far above the typical range of 0.95–0.97 for real feeling thermometer data and the standard deviation of the within-person change in Study 1 is only about 1.99, compared to 6.61 in Study 2, indicating that responses in Study 1 barely changed between waves. Taken together, these patterns suggest the data were likely fabricated rather than collected from real respondents. A fabricator might copy the distribution of a real survey like CCAP to make the data look realistic but unintentionally generate responses that are too consistent across waves which produces impossibly high correlations and minimal individual change.
